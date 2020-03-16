@@ -44,7 +44,15 @@
 - name: configure a build environment
   hosts: alpine-builder
   become_method: su
-  become_user: tgerczei
+  become_user: "{{ user.handle }}"
+  vars:
+    user:
+      name: GERCZEI, Tamas
+      email: tamas@gerczei.eu
+      handle: tgerczei
+    build_config:
+      - PACKAGER="{{ user.name }} <{{ user.email }}>"
+      - MAINTAINER="$PACKAGER"
   tasks:
     - name: update system
       apk:
@@ -64,14 +72,10 @@
       loop_control:
         loop_var: config_line
         label: "{{ config_line.split('=')[0] }}"
-      vars:
-        build_config:
-          - PACKAGER="GERCZEI, Tamas <tamas@gerczei.eu>"
-          - MAINTAINER="$PACKAGER"
 
     - name: ensure user exists
       user:
-        name: tgerczei
+        name: "{{ user.handle }}"
         shell: /bin/sh
         groups:
           - wheel
@@ -89,53 +93,60 @@
           vars:
             git_settings:
               - name: user.email
-                value: tamas@gerczei.eu
+                value: "{{ user.email }}"
               - name: user.name
-                value: GERCZEI, Tamas
+                value: "{{ user.name }}"
     
         - name: clone aports repository
           git:
             repo: git://git.alpinelinux.org/aports
-            dest: /home/tgerczei/aports
+            dest: "/home/{{ user.handle }}/aports"
             update: no
           register: repo
 
         - name: generate cryptographic key for the build system
           command: abuild-keygen -qai
           args:
-            creates: /home/tgerczei/.abuild
+            creates: "/home/{{ user.handle }}/.abuild"
 
       become: yes
 
-- name: build a Gitea package
+- name: build a package
   hosts: alpine-builder
   become_method: su
-  become_user: tgerczei
+  become_user: "{{ user.handle }}"
+  vars:
+    package_name: community/gitea
+    package_version: 1.11.3-r0
+    user:
+      name: GERCZEI, Tamas
+      email: tamas@gerczei.eu
+      handle: tgerczei
   tasks:
     - name: build and fetch package
       block:
         - name: modify APKBUILD
           copy:
-            src: /home/tgerczei/alpine-gitea/APKBUILD
-            dest: /home/tgerczei/aports/community/gitea/
+            src: "/home/{{ user.handle }}/alpine-{{ package_name | basename }}/APKBUILD_{{ package_version }}"
+            dest: "/home/{{ user.handle }}/aports/{{ package_name }}/APKBUILD"
           register: apkbuild
           when: repo is changed
 
         - command: abuild -q checksum
           args:
-            chdir: /home/tgerczei/aports/community/gitea
+            chdir: "/home/{{ user.handle }}/aports/{{ package_name }}"
           when: apkbuild is changed
 
         - name: build package
           command: abuild -qrc
           args:
-            chdir: /home/tgerczei/aports/community/gitea
-            creates: /home/tgerczei/packages/community/x86_64
+            chdir: "/home/{{ user.handle }}/aports/{{ package_name }}"
+            creates: "/home/{{ user.handle }}/packages/{{ package_name | dirname }}/x86_64"
 
         - name: obtain package
           fetch:
-            src: /home/tgerczei/packages/community/x86_64/gitea-1.11.3-r0.apk
-            dest: /home/tgerczei/alpine-gitea/packages/
+            src: "/home/{{ user.handle }}/packages/{{ package_name | dirname }}/x86_64/{{ package_name | basename }}-{{ package_version }}.apk"
+            dest: "/home/{{ user.handle }}/alpine-{{ package_name | basename }}/packages/"
             flat: yes
 
       become: yes
