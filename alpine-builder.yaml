@@ -1,0 +1,141 @@
+---
+- name: create an Alpine build container
+  hosts: localhost
+  gather_facts: false
+  collections:
+    - containers.podman
+  vars:
+    alpine_version: 3.11.3
+  tasks:
+    - name: check container
+      podman_container_info:
+        name: alpine-builder
+      register: container_info
+
+    - name: create container
+      block:
+        - name: ensure image is present and fresh
+          podman_image:
+            name: docker.io/library/alpine
+            tag: "{{ alpine_version }}"
+            force: yes
+
+        - podman_container:
+            name: alpine-builder
+            image: "alpine:{{ alpine_version }}"
+            tty: yes
+            interactive: yes
+          register: container
+      when: "'no such container' in container_info.stderr"
+
+    - name: register container
+      add_host:
+        name: alpine-builder
+        ansible_connection: podman
+      changed_when: false
+
+    - name: install Python
+      block:
+        - raw: apk update
+        - raw: apk add python3
+      delegate_to: alpine-builder
+      when: container is changed
+
+- name: configure a build environment
+  hosts: alpine-builder
+  become_method: su
+  become_user: tgerczei
+  tasks:
+    - name: update system
+      apk:
+        update_cache: yes
+        upgrade: yes
+
+    - name: install Alpine SDK
+      package:
+        name: alpine-sdk
+
+    - name: configure build system
+      lineinfile:
+         path: /etc/abuild.conf
+         line: "{{ config_line }}"
+         insertafter: "^#{{ config_line.split('=')[0] }}.*"
+      loop: "{{ build_config }}"
+      loop_control:
+        loop_var: config_line
+        label: "{{ config_line.split('=')[0] }}"
+      vars:
+        build_config:
+          - PACKAGER="GERCZEI, Tamas <tamas@gerczei.eu>"
+          - MAINTAINER="$PACKAGER"
+
+    - name: ensure user exists
+      user:
+        name: tgerczei
+        shell: /bin/sh
+        groups:
+          - wheel
+          - abuild
+        append: yes
+      
+    - name: obtain aports tree
+      block:
+        - name: configure git
+          git_config:
+            name: "{{ item.name }}"
+            value: "{{ item.value }}"
+            scope: global
+          loop: "{{ git_settings }}"
+          vars:
+            git_settings:
+              - name: user.email
+                value: tamas@gerczei.eu
+              - name: user.name
+                value: GERCZEI, Tamas
+    
+        - name: clone aports repository
+          git:
+            repo: git://git.alpinelinux.org/aports
+            dest: /home/tgerczei/aports
+            update: no
+          register: repo
+
+        - name: generate cryptographic key for the build system
+          command: abuild-keygen -qai
+          args:
+            creates: /home/tgerczei/.abuild
+
+      become: yes
+
+- name: build a Gitea package
+  hosts: alpine-builder
+  become_method: su
+  become_user: tgerczei
+  tasks:
+    - name: build and fetch package
+      block:
+        - name: modify APKBUILD
+          copy:
+            src: /home/tgerczei/alpine-gitea/APKBUILD
+            dest: /home/tgerczei/aports/community/gitea/
+          register: apkbuild
+          when: repo is changed
+
+        - command: abuild -q checksum
+          args:
+            chdir: /home/tgerczei/aports/community/gitea
+          when: apkbuild is changed
+
+        - name: build package
+          command: abuild -qrc
+          args:
+            chdir: /home/tgerczei/aports/community/gitea
+            creates: /home/tgerczei/packages/community/x86_64
+
+        - name: obtain package
+          fetch:
+            src: /home/tgerczei/packages/community/x86_64/gitea-1.11.3-r0.apk
+            dest: /home/tgerczei/alpine-gitea/packages/
+            flat: yes
+
+      become: yes
