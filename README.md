@@ -7,6 +7,9 @@
 <li>Ansible 2.9+</li>
 <li>collection containers.podman</li>
 <li>libpod</li>
+<li><i>directory</i> /home/<strong>user.handle</strong>/alpine-<strong>package.name</strong></li>
+<li><i>directory</i> /home/<strong>user.handle</strong>/alpine-<strong>package.name</strong>/packages</li>
+<li><i>file</i> /home/<strong>user.handle</strong>/alpine-<strong>package.name</strong>/APKBUILD_<strong>package.version</strong></li>
 </ul>
 
 Developed and tested on Gentoo GNU/Linux with ZFS via fuse-overlayfs and crun in rootless mode.
