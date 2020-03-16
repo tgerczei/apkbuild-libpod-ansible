@@ -116,8 +116,9 @@
   become_method: su
   become_user: "{{ user.handle }}"
   vars:
-    package_name: community/gitea
-    package_version: 1.11.3-r0
+    package:
+      name: community/gitea
+      version: 1.11.3-r0
     user:
       name: GERCZEI, Tamas
       email: tamas@gerczei.eu
@@ -127,26 +128,26 @@
       block:
         - name: modify APKBUILD
           copy:
-            src: "/home/{{ user.handle }}/alpine-{{ package_name | basename }}/APKBUILD_{{ package_version }}"
-            dest: "/home/{{ user.handle }}/aports/{{ package_name }}/APKBUILD"
+            src: "/home/{{ user.handle }}/alpine-{{ package.name | basename }}/APKBUILD_{{ package.version }}"
+            dest: "/home/{{ user.handle }}/aports/{{ package.name }}/APKBUILD"
           register: apkbuild
           when: repo is changed
 
         - command: abuild -q checksum
           args:
-            chdir: "/home/{{ user.handle }}/aports/{{ package_name }}"
+            chdir: "/home/{{ user.handle }}/aports/{{ package.name }}"
           when: apkbuild is changed
 
         - name: build package
           command: abuild -qrc
           args:
-            chdir: "/home/{{ user.handle }}/aports/{{ package_name }}"
-            creates: "/home/{{ user.handle }}/packages/{{ package_name | dirname }}/x86_64"
+            chdir: "/home/{{ user.handle }}/aports/{{ package.name }}"
+            creates: "/home/{{ user.handle }}/packages/{{ package.name | dirname }}/x86_64"
 
         - name: obtain package
           fetch:
-            src: "/home/{{ user.handle }}/packages/{{ package_name | dirname }}/x86_64/{{ package_name | basename }}-{{ package_version }}.apk"
-            dest: "/home/{{ user.handle }}/alpine-{{ package_name | basename }}/packages/"
+            src: "/home/{{ user.handle }}/packages/{{ package.name | dirname }}/x86_64/{{ package.name | basename }}-{{ package.version }}.apk"
+            dest: "/home/{{ user.handle }}/alpine-{{ package.name | basename }}/packages/"
             flat: yes
 
       become: yes
