@@ -5,7 +5,7 @@
   collections:
     - containers.podman
   vars:
-    alpine_version: 3.11.3
+    alpine_version: 3.13.1
   tasks:
     - name: check container
       podman_container_info:
