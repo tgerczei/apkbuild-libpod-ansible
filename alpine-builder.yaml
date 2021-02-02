@@ -133,7 +133,8 @@
           register: apkbuild
           when: repo is changed
 
-        - command: abuild -q checksum
+        - name: generate checksum
+          command: abuild -q checksum
           args:
             chdir: "/home/{{ user.handle }}/aports/{{ package.name }}"
           when: apkbuild is changed
